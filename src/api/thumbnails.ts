@@ -4,7 +4,7 @@ import { getVideo, updateVideo } from "../db/videos";
 import type { ApiConfig } from "../config";
 import type { BunRequest } from "bun";
 import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
-import { getInMemoryURL } from "./assets";
+import path from "path";
 
 type Thumbnail = {
   data: ArrayBuffer;
@@ -35,11 +35,11 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   if (!mediaType) {
     throw new BadRequestError("Missing Content-Type for thumbnail");
   }
+  if (mediaType !== "image/jpeg" && mediaType !== "image/png") {
+    throw new BadRequestError("Invalid Content-Type for thumbnail");
+  }
 
   const buffer = await file.arrayBuffer();
-
-  const base64String = Buffer.from(buffer).toString("base64");
-  const dataUrl = `data:${mediaType};base64,${base64String}`;
 
   if (buffer.byteLength > MAX_UPLOAD_SIZE) {
     throw new BadRequestError("File too large");
@@ -57,8 +57,15 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
     throw new Error("Error reading file data");
   }
 
-  // const urlPath = getInMemoryURL(cfg, videoId);
-  video.thumbnailURL = dataUrl;
+  const filePath = path.join("assets", `${videoId}.${mediaType.split("/")[1]}`);
+
+  video.thumbnailURL = filePath;
+
+  try {
+    Bun.write(filePath, fileData);
+  } catch (error) {
+    throw new Error("Error writing file");
+  }
   updateVideo(cfg.db, video);
 
   return respondWithJSON(200, video);
