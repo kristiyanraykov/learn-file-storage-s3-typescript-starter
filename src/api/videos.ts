@@ -7,7 +7,7 @@ import { getBearerToken, validateJWT } from "../auth";
 import { getVideo, updateVideo } from "../db/videos";
 import path from "path";
 import { randomBytes } from "crypto";
-import { getVideoAspectRatio } from "./assets";
+import { getVideoAspectRatio, processVideoForFastStart } from "./assets";
 
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024 * 1024; // 1GB
 
@@ -60,27 +60,34 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
 
   try {
     await Bun.write(filePath, fileData);
+
+    const orientation = await getVideoAspectRatio(filePath);
+    const fastStartFilePath = await processVideoForFastStart(filePath);
+
+    const s3Path = `${orientation}/${fullFileName}`;
+
+    await cfg.s3Client?.write(s3Path, Bun.file(fastStartFilePath), {
+      type: mediaType,
+    });
+
+    const videoUrl = `https://${cfg.s3Bucket}.s3.${cfg.s3Region}.amazonaws.com/${s3Path}`;
+    video.videoURL = videoUrl;
+
+    updateVideo(cfg.db, video);
+
+    await Bun.file(filePath)
+      .unlink()
+      .catch((err) => {
+        console.error("Error deleting file:", err);
+      });
   } catch (error) {
+    await Bun.file(filePath)
+      .unlink()
+      .catch((err) => {
+        console.error("Error deleting file:", err);
+      });
     throw new Error("Error writing file");
   }
-
-  const orientation = await getVideoAspectRatio(filePath);
-  const s3Path = `${orientation}/${fullFileName}`;
-
-  await cfg.s3Client?.write(s3Path, Bun.file(filePath), {
-    type: mediaType,
-  });
-
-  const videoUrl = `https://${cfg.s3Bucket}.s3.${cfg.s3Region}.amazonaws.com/${s3Path}`;
-  video.videoURL = videoUrl;
-
-  updateVideo(cfg.db, video);
-
-  await Bun.file(filePath)
-    .unlink()
-    .catch((err) => {
-      console.error("Error deleting file:", err);
-    });
 
   return respondWithJSON(200, video);
 }

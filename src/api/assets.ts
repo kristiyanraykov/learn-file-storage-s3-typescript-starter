@@ -56,3 +56,38 @@ export async function getVideoAspectRatio(
 
   return calculateAspectRatio(Number(width), Number(height));
 }
+
+export async function processVideoForFastStart(inputFilePath: string) {
+  const outputFilePath = inputFilePath.replace(/\.mp4$/, "_processed.mp4");
+  const subprocess = Bun.spawn({
+    cmd: [
+      "ffmpeg",
+      "-y", // Automatically overwrite output files
+      "-i",
+      inputFilePath,
+      "-movflags",
+      "faststart",
+      "-map_metadata",
+      "0",
+      "-codec",
+      "copy",
+      "-f",
+      "mp4",
+      "-loglevel", // Only log actual errors
+      "error",
+      outputFilePath,
+    ],
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const exitCode = await subprocess.exited;
+
+  if (exitCode !== 0) {
+    const errorOutput = await Bun.readableStreamToText(subprocess.stderr);
+    throw new Error(
+      `Error processing video for fast start (exit code ${exitCode}): ${errorOutput.trim()}`,
+    );
+  }
+  return outputFilePath;
+}
