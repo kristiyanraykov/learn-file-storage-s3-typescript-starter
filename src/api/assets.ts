@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync } from "fs";
 
 import type { ApiConfig } from "../config";
+import { S3Client } from "bun";
+import type { Video } from "../db/videos";
 
 export function ensureAssetsDir(cfg: ApiConfig) {
   if (!existsSync(cfg.assetsRoot)) {
@@ -90,4 +92,30 @@ export async function processVideoForFastStart(inputFilePath: string) {
     );
   }
   return outputFilePath;
+}
+
+async function generatePresignedURL(
+  cfg: ApiConfig,
+  key: string,
+  expireTime: number,
+) {
+  return cfg.s3Client.presign(key, {
+    expiresIn: expireTime,
+  });
+}
+
+export async function dbVideoToSignedVideo(cfg: ApiConfig, video: Video) {
+  if (!video.videoURL) {
+    return video;
+  }
+
+  const presignedURL = await generatePresignedURL(
+    cfg,
+    video.videoURL,
+    60 * 60, // 1 hour
+  );
+  return {
+    ...video,
+    videoURL: presignedURL,
+  };
 }

@@ -12,7 +12,7 @@ export type ApiConfig = {
   s3Region: string;
   s3CfDistribution: string;
   port: string;
-  s3Client?: S3Client;
+  s3Client: S3Client;
 };
 
 const pathToDB = envOrThrow("DB_PATH");
