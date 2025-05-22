@@ -7,11 +7,7 @@ import { getBearerToken, validateJWT } from "../auth";
 import { getVideo, updateVideo } from "../db/videos";
 import path from "path";
 import { randomBytes } from "crypto";
-import {
-  dbVideoToSignedVideo,
-  getVideoAspectRatio,
-  processVideoForFastStart,
-} from "./assets";
+import { getVideoAspectRatio, processVideoForFastStart } from "./assets";
 
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024 * 1024; // 1GB
 
@@ -74,7 +70,7 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
       type: mediaType,
     });
 
-    video.videoURL = s3Path;
+    video.videoURL = cfg.s3CfDistribution + "/" + s3Path;
 
     updateVideo(cfg.db, video);
 
@@ -91,7 +87,9 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
       });
     throw new Error("Error writing file");
   }
-  const signedVideo = await dbVideoToSignedVideo(cfg, video);
 
-  return respondWithJSON(200, dbVideoToSignedVideo(cfg, signedVideo));
+  // NOTE: Removed when introducing CDN
+  // const signedVideo = await dbVideoToSignedVideo(cfg, video);
+
+  return respondWithJSON(200, video);
 }
